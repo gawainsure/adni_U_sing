@@ -20,8 +20,11 @@ From: library/ubuntu:16.04
     
     # Install some perl stuff
     apt-get -y install libmodule-install-perl
+    
+    # automatically configure keyboard-configuration
+    DEBIAN_FRONTEND=noninteractive apt-get install --assume-yes keyboard-configuration
 
-
+     
     #################################
     # Install the NVIDIA requirements
     #################################
@@ -34,12 +37,13 @@ From: library/ubuntu:16.04
 
     # cuDNN SDK
     tar -xvzf /opt/cudnn-__CUDNN_VERSION__.tgz
-    cp cuda/include/cudnn.h /usr/local/cuda-__CUDA_VERSION__/include/
-    cp cuda/lib64/libcudnn* /usr/local/cuda-__CUDA_VERSION__/lib64/
+    cp ./cuda/include/cudnn.h /usr/local/cuda-__CUDA_VERSION__/include/
+    cp ./cuda/lib64/libcudnn* /usr/local/cuda-__CUDA_VERSION__/lib64/
     chmod a+r /usr/local/cuda-__CUDA_VERSION__/include/cudnn.h /usr/local/cuda-__CUDA_VERSION__/lib64/libcudnn*
     
     # Install NVIDIA drivers:
     apt-get -y install nvidia-__NVIDIA_MV__
+
 
     # libcupti-dev library
     apt-get -y install libcupti-dev
