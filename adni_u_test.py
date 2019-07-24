@@ -1,17 +1,11 @@
-'''Trains a simple deep NN on the MNIST dataset.
-Gets to 98.40% test accuracy after 20 epochs
-(there is *a lot* of margin for parameter tuning).
-2 seconds per epoch on a K520 GPU.
-
-Shamelessly copied/pasted from keras repository
-'''
 
 from __future__ import print_function
 
 import keras
 from keras.models import Model, load_model
-from keras.layers.core import Input, BatchNormalization, Activation, Dense, Droupout 
-from keras.layers.pooling import MaxPooling2D, GlobalMaxpool2D
+from keras.layers import Input, BatchNormalization, Activation, Dense, Dropout
+from keras.layers.core import Lambda, RepeatVector, Reshape
+from keras.layers.pooling import MaxPooling2D, GlobalMaxPool2D
 from keras.layers.convolutional import SeparableConv2D, Conv2DTranspose, Conv2D
 from keras.layers.merge import concatenate, add
 from keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
@@ -19,7 +13,7 @@ from keras.preprocessing.image import ImageDataGenerator, array_to_img, img_to_a
 from keras.models import Sequential
 from keras.optimizers import Adam
 
-from kearas import backend as K
+from keras import backend as K
 
 batch_size = 128
 epochs = 500
@@ -71,7 +65,7 @@ def get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True):
     p2 = Dropout(dropout)(p2)
 
     c3 = conv2d_block(p2, n_filters=n_filters*4, kernel_size=3, batchnorm=batchnorm)
-    p3 = MaxPooling2D((2, 2), strides=None, padding='', data_format='channels_last') (c3)
+    p3 = MaxPooling2D((2, 2), strides=None, padding='same', data_format='channels_last') (c3)
     p3 = Dropout(dropout)(p3)
 
     c4 = conv2d_block(p3, n_filters=n_filters*8, kernel_size=3, batchnorm=batchnorm)
