@@ -1,6 +1,8 @@
 
 from __future__ import print_function
 
+from sklearn.model_selection import train_test_split
+
 import keras
 from keras.models import Model, load_model
 from keras.layers import Input, BatchNormalization, Activation, Dense, Dropout
@@ -15,8 +17,8 @@ from keras.optimizers import Adam
 
 from keras import backend as K
 
-batch_size = 128
-epochs = 500
+batch_size = 1280
+epochs = 1000
 
 # define convolutional block
 def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
@@ -95,7 +97,7 @@ def get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True):
     u9 = Dropout(dropout)(u9)
     c9 = conv2d_block(u9, n_filters=n_filters*1, kernel_size=3, batchnorm=batchnorm)
     
-    outputs = Conv2D(1, (1, 1), activation='sigmoid') (c9)
+    outputs = Conv2D(1, (1, 1), activation='softmax') (c9) # Pay attention to the activation function here!!
     model = Model(inputs=[input_img], outputs=[outputs])
     return model
 
@@ -121,26 +123,22 @@ model.compile(optimizer=Adam(), loss=dice_coef_loss, metrics=[dice_coef])
 model.summary()
 
 # the data, split between train and test sets
-#(x_train, y_train), (x_test, y_test) = mnist.load_data()
+ x_train, x_test, y_train, y_test = train_test_split(input_img, output_seg, test_size=0.20, random_state=42)
 
-#x_train = x_train.reshape(60000, 784)
-#x_test = x_test.reshape(10000, 784)
-#x_train = x_train.astype('float32')
-#x_test = x_test.astype('float32')
-#x_train /= 255
-#x_test /= 255
-#print(x_train.shape[0], 'train samples')
-#print(x_test.shape[0], 'test samples')
+x_train = x_train.astype('float32')
+x_test = x_test.astype('float32')
+x_train /= 255
+x_test /= 255
+print(x_train.shape[0], 'train samples')
+print(x_test.shape[0], 'test samples')
 
-# convert class vectors to binary class matrices
-#y_train = keras.utils.to_categorical(y_train, num_classes)
-#y_test = keras.utils.to_categorical(y_test, num_classes)
 
-#history = model.fit(x_train, y_train,
-#                    batch_size=batch_size,
-#                    epochs=epochs,
-#                    verbose=1,
-#                    validation_data=(x_test, y_test))
+history = model.fit(x_train, y_train,
+                    batch_size=batch_size,
+                    epochs=epochs,
+                    verbose=1,
+                    validation_data=(x_test, y_test))
+
 #score = model.evaluate(x_test, y_test, verbose=0)
 #print('Test loss:', score[0])
 #print('Test accuracy:', score[1])
