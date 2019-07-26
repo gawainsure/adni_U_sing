@@ -2,6 +2,8 @@
 from __future__ import print_function
 
 from sklearn.model_selection import train_test_split
+import pandas as pd
+import numpy as np
 
 import keras
 from keras.models import Model, load_model
@@ -17,8 +19,8 @@ from keras.optimizers import Adam
 
 from keras import backend as K
 
-batch_size = 1280
-epochs = 1000
+batch_size = 4
+epochs = 1
 
 # define convolutional block
 def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
@@ -122,23 +124,39 @@ model = get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True)
 model.compile(optimizer=Adam(), loss=dice_coef_loss, metrics=[dice_coef])
 model.summary()
 
-# the data, split between train and test sets
- x_train, x_test, y_train, y_test = train_test_split(input_img, output_seg, test_size=0.20, random_state=42)
+# the data, split between train and validation sets
+#data_dir = '/media/rajlab/DATASETS/copy_ADNI/adni_u_train/train_2d_256/'
+data_dir = '/home/gavingao/Documents/Jupyter/adni_U_sing/'
 
- x_train = x_train.astype('float32')
- x_test = x_test.astype('float32')
- x_train /= 255
- x_test /= 255
- print(x_train.shape[0], 'train samples')
- print(x_test.shape[0], 'test samples')
+input_memmap = np.memmap(data_dir+'test_2d_256_lt', dtype='float32', mode='r', shape=(196*97, 176, 176, 5))
+#input_img_ts = np.zeros(input_memmap.shape)
+#input_img_ts[:] = input_memmap[:]
+input_img_ts = np.zeros((196*20, 176, 176, 5))
+input_img_ts = input_memmap[0:20*196,:,:,:] 
+print('X-shape:'+str(input_img_ts.shape))
+
+output_memmap = np.memmap(data_dir+'test_seg_256_lt', dtype='float32', mode='r', shape=(196*97, 176, 176))
+#output_seg_ts = np.zeros(output_memmap.shape)
+#output_seg_ts[:] = output_memmap[:] 
+output_seg_ts = np.zeros((196*20, 176, 176))
+output_seg_ts = output_memmap[0:20*196, :, :]
+print('y-shape:'+str(output_seg_ts.shape))
+
+x_train, x_valid, y_train, y_valid = train_test_split(input_img_ts, output_seg_ts, test_size=0.20, random_state=42)
+
+x_train = x_train.astype('float32')
+x_valid = x_valid.astype('float32')
+ 
+print(x_train.shape[0], 'train samples')
+print(x_valid.shape[0], 'test samples')
 
 
- history = model.fit(x_train, y_train,
-                     batch_size=batch_size,
-                     epochs=epochs,
-                     verbose=1,
-                     validation_data=(x_test, y_test))
+history = model.fit(x_train, y_train,
+                    batch_size=batch_size,
+                    epochs=epochs,
+                    verbose=1)
+#                    validation_data=(x_valid, y_valid))
 
-score = model.evaluate(x_test, y_test, verbose=0)
-print('Test loss:', score[0])
-print('Test Dice Coeff.:', score[1])
+#score = model.evaluate(x_test, y_test, verbose=0)
+#print('Test loss:', score[0])
+#print('Test Dice Coeff.:', score[1])
