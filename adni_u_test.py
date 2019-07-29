@@ -1,4 +1,3 @@
-
 from __future__ import print_function
 
 from sklearn.model_selection import train_test_split
@@ -19,8 +18,8 @@ from keras.optimizers import Adam
 
 from keras import backend as K
 
-batch_size = 4
-epochs = 1
+batch_size = 8
+epochs = 3
 
 # define convolutional block
 def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
@@ -38,7 +37,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
                         bias_constraint=None)(input_tensor)
     
     if batchnorm:
-        x = BatchNormalization()(x)
+        x = BatchNormalization(axis=-1)(x)
     x = Activation("elu")(x)
     # second layer
     x = SeparableConv2D(filters = n_filters, kernel_size = (kernel_size, kernel_size), 
@@ -53,7 +52,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
                         depthwise_constraint=None, pointwise_constraint=None, 
                         bias_constraint=None)(x)
     if batchnorm:
-        x = BatchNormalization()(x)
+        x = BatchNormalization(axis=-1)(x)
     x = Activation("elu")(x)
     return x
 
@@ -99,17 +98,23 @@ def get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True):
     u9 = Dropout(dropout)(u9)
     c9 = conv2d_block(u9, n_filters=n_filters*1, kernel_size=3, batchnorm=batchnorm)
     
-    outputs = Conv2D(1, (1, 1), activation='softmax') (c9) # Pay attention to the activation function here!!
+    outputs = Conv2D(1, (1, 1), activation='relu') (c9) #'softmax' Pay attention to the activation function here!!
     model = Model(inputs=[input_img], outputs=[outputs])
     return model
 
 # define cost function
 def dice_coef(y_true, y_pred, smooth= 1e-8):
-    y_true_f = K.batch_flatten(y_true)
-    y_pred_f = K.batch_flatten(y_pred)
-    intersection = K.batch_dot(y_true_f, K.transpose(y_pred_f), axes=1) # batch-axis=0
-    union = K.batch_dot(y_true_f, K.transpose(y_true_f), axes=1)+ K.batch_dot(y_pred_f, K.transpose(y_pred_f), axes=1)
+    # y_pred[y_pred<0]=0
+    # y_pred[y_pred>5]=5
+    intersection = K.sum(y_true * y_pred, axis=[1,2,3] )
+    union = K.sum(y_true * y_true , axis=[1,2,3]) + K.sum(y_pred * y_pred, axis=[1,2,3] )
     return K.mean( (2 * intersection + smooth) / (union + smooth), axis=0)
+  
+   # y_true_f = K.batch_flatten(y_true)
+   # y_pred_f = K.batch_flatten(y_pred)
+   # intersection = K.batch_dot(y_true_f, K.transpose(y_pred_f), axes=1) # batch-axis=0
+   # union = K.batch_dot(y_true_f, K.transpose(y_true_f), axes=1)+ K.batch_dot(y_pred_f, K.transpose(y_pred_f), axes=1)
+   # return K.mean( (2 * intersection + smooth) / (union + smooth), axis=0)
 
 def dice_coef_loss(y_true, y_pred):
     return 1-dice_coef(y_true, y_pred)
@@ -121,7 +126,9 @@ im_width = 176
 input_img = Input((im_height, im_width, 5), name='img')
 model = get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True)
 
-model.compile(optimizer=Adam(), loss=dice_coef_loss, metrics=[dice_coef])
+model.compile(optimizer=Adam(), loss=dice_coef_loss, metrics=[dice_coef, 'mae'])
+# 'categorical_crossentropy'; dice_coef_loss;'mean_squared_error'
+# keras.metrics.categorical_accuracy; dice_coef; 'mae'
 model.summary()
 
 # the data, split between train and validation sets
@@ -138,8 +145,8 @@ print('X-shape:'+str(input_img_ts.shape))
 output_memmap = np.memmap(data_dir+'test_seg_256_lt', dtype='float32', mode='r', shape=(196*97, 176, 176))
 #output_seg_ts = np.zeros(output_memmap.shape)
 #output_seg_ts[:] = output_memmap[:] 
-output_seg_ts = np.zeros((196*20, 176, 176))
-output_seg_ts = output_memmap[0:20*196, :, :]
+output_seg_ts = np.zeros((196*20, 176, 176,1))
+output_seg_ts[:,:,:,0] = output_memmap[0:20*196, :, :]
 print('y-shape:'+str(output_seg_ts.shape))
 
 x_train, x_valid, y_train, y_valid = train_test_split(input_img_ts, output_seg_ts, test_size=0.20, random_state=42)
@@ -154,8 +161,8 @@ print(x_valid.shape[0], 'test samples')
 history = model.fit(x_train, y_train,
                     batch_size=batch_size,
                     epochs=epochs,
-                    verbose=1)
-#                    validation_data=(x_valid, y_valid))
+                    verbose=1,
+                    validation_data=(x_valid, y_valid))
 
 #score = model.evaluate(x_test, y_test, verbose=0)
 #print('Test loss:', score[0])
