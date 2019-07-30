@@ -46,15 +46,15 @@ def dice_coef_loss(y_true, y_pred):
 data_dir = './train_2d_256/'
 model_dir = './model_2d/'
 history_dir = './history_2d/'
-history_name = 'HistoryDict_test' #!!!!!Remember to double-check this name!!!!! 
+history_name = 'HistoryDict_dice' #!!!!!Remember to double-check this name!!!!! 
 
 # 2. Input parameters
 im_height = 176
 im_width = 176
 
 # 3. Dataset spliting
-num_tr = 20 #300
-num_ts = 5 #97
+num_tr = 300 #300
+num_ts = 97 #97
 
 # 4. U-net compiling parameters
 kernel_size_handle = 3
@@ -62,15 +62,15 @@ num_filter_handle = 16
 dropout_handle = 0.10
 batchnorm_handle = True
 conv_actv = 'linear' #linear; sigmoid
-loss_function = dice_coef_loss  #dice_coef_loss; 'categorical_crossentropy'
+loss_function = dice_coef_loss #dice_coef_loss; 'categorical_crossentropy'
 performance_metrics = [dice_coef, 'categorical_accuracy']
 
 # 4.1 Optimizer:
 adam = keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
 # 5. U-net fitting parameters
-batch_size = 16
-epochs = 5
+batch_size = 64
+epochs = 500
 validation_handle = 0.3
 checkpoint = keras.callbacks.ModelCheckpoint(model_dir,\
                                              monitor='categorical_accuracy',\
