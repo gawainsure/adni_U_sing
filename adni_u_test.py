@@ -98,14 +98,12 @@ def get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True):
     u9 = Dropout(dropout)(u9)
     c9 = conv2d_block(u9, n_filters=n_filters*1, kernel_size=3, batchnorm=batchnorm)
     
-    outputs = Conv2D(1, (1, 1), activation='relu') (c9) #'softmax' Pay attention to the activation function here!!
+    outputs = Conv2D(6, (1, 1), activation='softmax') (c9) #'softmax' Pay attention to the activation function here!!
     model = Model(inputs=[input_img], outputs=[outputs])
     return model
 
 # define cost function
 def dice_coef(y_true, y_pred, smooth= 1e-8):
-    # y_pred[y_pred<0]=0
-    # y_pred[y_pred>5]=5
     intersection = K.sum(y_true * y_pred, axis=[1,2,3] )
     union = K.sum(y_true * y_true , axis=[1,2,3]) + K.sum(y_pred * y_pred, axis=[1,2,3] )
     return K.mean( (2 * intersection + smooth) / (union + smooth), axis=0)
@@ -120,34 +118,45 @@ def dice_coef_loss(y_true, y_pred):
     return 1-dice_coef(y_true, y_pred)
 
 # compile input parameters
+num_tr = 300
+num_ts = 97
+data_dir = '/home/gavingao/Documents/Jupyter/adni_U_sing/'
 im_height = 176
 im_width = 176
 
 input_img = Input((im_height, im_width, 5), name='img')
 model = get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True)
+adam = keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
-model.compile(optimizer=Adam(), loss=dice_coef_loss, metrics=[dice_coef, 'mae'])
+model.compile(optimizer=adam, loss=dice_coef_loss, metrics=[dice_coef, 'mae'])
 # 'categorical_crossentropy'; dice_coef_loss;'mean_squared_error'
 # keras.metrics.categorical_accuracy; dice_coef; 'mae'
+
 model.summary()
 
-# the data, split between train and validation sets
-#data_dir = '/media/rajlab/DATASETS/copy_ADNI/adni_u_train/train_2d_256/'
-data_dir = '/home/gavingao/Documents/Jupyter/adni_U_sing/'
+# load the data, split between train and validation sets
+#!!!!!!!!!(uncomment the following paragraph when formally training)!!!!!!!!!!!!!!
+#input_memmap = np.memmap(data_dir+'train_2d_256_lt', dtype='float32', mode='r', shape=(196*300, 176, 176, 5))
+#input_img_tr = np.zeros((196*num_tr, 176, 176, 5))
+#input_img_tr = input_memmap[0:196*num_tr,:,:,:] 
+#print('X-shape training:'+str(input_img_tr.shape))
+#output_memmap = np.memmap(data_dir+'train_seg_256_onehot', dtype='float32', mode='r', shape=(196*300, 176, 176, 6))
+#output_seg_tr = np.zeros((196*num_tr, 176, 176, 6))
+#output_seg_tr[:,:,:,0] = output_memmap[0:196*num_tr, :, :]
+#print('y-shape training:'+str(output_seg_tr.shape))
+#del input_memmap
+#del output_memmap
 
 input_memmap = np.memmap(data_dir+'test_2d_256_lt', dtype='float32', mode='r', shape=(196*97, 176, 176, 5))
-#input_img_ts = np.zeros(input_memmap.shape)
-#input_img_ts[:] = input_memmap[:]
-input_img_ts = np.zeros((196*20, 176, 176, 5))
-input_img_ts = input_memmap[0:20*196,:,:,:] 
+input_img_ts = np.zeros((196*num_ts, 176, 176, 5))
+input_img_ts = input_memmap[0:196*num_ts,:,:,:] 
 print('X-shape:'+str(input_img_ts.shape))
-
-output_memmap = np.memmap(data_dir+'test_seg_256_lt', dtype='float32', mode='r', shape=(196*97, 176, 176))
-#output_seg_ts = np.zeros(output_memmap.shape)
-#output_seg_ts[:] = output_memmap[:] 
-output_seg_ts = np.zeros((196*20, 176, 176,1))
-output_seg_ts[:,:,:,0] = output_memmap[0:20*196, :, :]
+output_memmap = np.memmap(data_dir+'test_seg_256_onehot', dtype='float32', mode='r', shape=(196*97, 176, 176, 6)) 
+output_seg_ts = np.zeros((196*num_ts, 176, 176, 6))
+output_seg_ts[:,:,:,0] = output_memmap[0:196*num_ts, :, :]
 print('y-shape:'+str(output_seg_ts.shape))
+del input_memmap
+del output_memmap
 
 x_train, x_valid, y_train, y_valid = train_test_split(input_img_ts, output_seg_ts, test_size=0.20, random_state=42)
 
