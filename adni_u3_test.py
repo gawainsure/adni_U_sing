@@ -9,7 +9,7 @@ import pickle
 
 import keras
 from keras.models import Model, load_model
-from keras.layers import Input, BatchNormalization, Activation, Dense, Dropout
+from keras.layers import Input, BatchNormalization, Activation, Dense, Dropout, Reshape
 from keras.layers.core import Lambda, RepeatVector, Reshape
 from keras.layers.pooling import MaxPooling2D, GlobalMaxPool2D
 from keras.layers.convolutional import SeparableConv2D, Conv2DTranspose, Conv2D
@@ -25,9 +25,8 @@ from keras import backend as K
 def dice_coef(y_true, y_pred, smooth= 1e-8):
     #y_true = K.argmax(y_true, axis=-1) # NOT for loss function use!!!
     #y_pred = K.argmax(y_pred, axis=-1) # NOT for loss function use!!!
-    intersection = K.sum(y_true * y_pred, axis=[1,2,3] ) #[1,2,3]
-    union = K.sum(y_true * y_true , axis=[1,2,3]) + K.sum(y_pred * y_pred, axis=[1,2,3] ) #[1,2,3]
-   # return K.mean( (2 * intersection ) / (union), axis=0)
+    intersection = K.sum(y_true * y_pred, axis=[1,2,3,4] ) #[1,2,3]
+    union = K.sum(y_true * y_true , axis=[1,2,3,4]) + K.sum(y_pred * y_pred, axis=[1,2,3,4] ) #[1,2,3]
     return K.mean( (2 * intersection + smooth) / (union + smooth), axis=0)
 
    # The following cost funciton definition doesn't work because of one tricky 'transpose'-incompatible-issue of y_true and y_pred
@@ -44,18 +43,18 @@ def dice_coef_loss(y_true, y_pred):
 
 # 1. Directories
 data_dir = './train_lt_256/'
-model_dir = './model_2d/'
-model_name = 'model_2d_entropy'
-history_dir = './history_2d/'
-history_name = 'HistoryDict_entropy' #!!!!!Remember to double-check this name!!!!! 
+model_dir = './model_3d/'
+history_dir = './history_3d/'
+history_name = 'HistoryDict_3d_test' #!!!!!Remember to double-check this name!!!!! 
 
 # 2. Input parameters
 im_height = 176
 im_width = 176
+im_depth = 196
 
 # 3. Dataset spliting
-num_tr = 300 #300
-num_ts = 97 #97
+num_tr = 20 #300
+num_ts = 5 #97
 
 # 4. U-net compiling parameters
 kernel_size_handle = 3
@@ -63,17 +62,17 @@ num_filter_handle = 16
 dropout_handle = 0.10
 batchnorm_handle = True
 conv_actv = 'linear' #linear; sigmoid
-loss_function = 'categorical_crossentropy'  #dice_coef_loss; 'categorical_crossentropy'
+loss_function = dice_coef_loss  #dice_coef_loss; 'categorical_crossentropy'
 performance_metrics = [dice_coef, 'categorical_accuracy']
 
 # 4.1 Optimizer:
 adam = keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
 # 5. U-net fitting parameters
-batch_size = 64
-epochs = 500
+batch_size = 16
+epochs = 5
 validation_handle = 0.3
-checkpoint = keras.callbacks.ModelCheckpoint(model_dir+model_name,\
+checkpoint = keras.callbacks.ModelCheckpoint(model_dir,\
                                              monitor='categorical_accuracy',\
                                              verbose=0,\
                                              save_weights_only=False,\
@@ -168,10 +167,11 @@ def get_unet(input_img, n_filters=num_filter_handle, dropout=dropout_handle, bat
     u9 = Conv2DTranspose(n_filters*1, (kernel_size_handle, kernel_size_handle), strides=(2, 2), padding='same') (c8)
     u9 = concatenate([u9, c1], axis=3)
     u9 = Dropout(dropout)(u9)
-    c9 = conv2d_block(u9, n_filters=n_filters*1, kernel_size=kernel_size_handle, batchnorm=batchnorm)
-    
-    u10 = Conv2D(6, (1, 1), activation='sigmoid',strides=(1,1), padding='same') (c9) #'softmax' Pay attention to the activation function here!!
-    outputs = Activation("softmax")(u10)
+    c9 = conv2d_block(u9, n_filters=n_filters*1, kernel_size=kernel_size_handle, batchnorm=batchnorm)    
+
+    u10 = Conv2D(6*196, (1, 1), activation='sigmoid',strides=(1,1), padding='same') (c9) #'softmax' Pay attention to the activation function here!!
+    u10_rs = Reshape((im_height, im_width, 196, 6))(u10) 
+    outputs = Activation("softmax")(u10_rs)
     model = Model(inputs=[input_img], outputs=[outputs])
     return model
 
@@ -183,7 +183,7 @@ if not os.path.exists(history_dir):
        os.mkdir(history_dir)
 
 # compile input parameters
-input_img = Input((im_height, im_width, 5), name='img')
+input_img = Input((im_height, im_width, im_depth), name='img')
 
 # get model!
 model = get_unet(input_img, n_filters=16, dropout=0.05, batchnorm=True)
@@ -198,24 +198,24 @@ model.summary()
 # load the data, split between train and validation sets
 
 #!!!!!!!!!(uncomment the following paragraph ONLY  when formally training)!!!!!!!!!!!!!!
-input_memmap = np.memmap(data_dir+'train_2d_256_lt', dtype='float64', mode='r', shape=(196*300, 176, 176, 5))
-input_img_tr = np.zeros((196*num_tr, 176, 176, 5))
-input_img_tr = input_memmap[0:196*num_tr,:,:,:] 
+input_memmap = np.memmap(data_dir+'train_img3d_256_lt', dtype='float64', mode='r', shape=(300, 176, 176, 196))
+input_img_tr = np.zeros((num_tr, 176, 176, 196))
+input_img_tr = input_memmap[0:num_tr, :, :, :] 
 print('X-shape training:'+str(input_img_tr.shape))
-output_memmap = np.memmap(data_dir+'train_seg_256_onehot', dtype='float64', mode='r', shape=(196*300, 176, 176, 6))
-output_seg_tr = np.zeros((196*num_tr, 176, 176, 6))
-output_seg_tr[:,:,:,:] = output_memmap[0:196*num_tr, :, :, :]
+output_memmap = np.memmap(data_dir+'train_seg3d_256_onehot', dtype='float64', mode='r', shape=(300, 176, 176, 196, 6))
+output_seg_tr = np.zeros((num_tr, 176, 176, 196, 6))
+output_seg_tr[:,:,:,:] = output_memmap[0:num_tr, :, :, :, :]
 print('y-shape training:'+str(output_seg_tr.shape))
-del input_memmap
-del output_memmap
+#del input_memmap
+#del output_memmap
 
-input_memmap = np.memmap(data_dir+'test_2d_256_lt', dtype='float64', mode='r', shape=(196*97, 176, 176, 5))
-input_img_ts = np.zeros((196*num_ts, 176, 176, 5))
-input_img_ts = input_memmap[0:196*num_ts,:,:,:] 
+input_memmap = np.memmap(data_dir+'test_img3d_256_lt', dtype='float64', mode='r', shape=(97, 176, 176, 196))
+input_img_ts = np.zeros((num_ts, 176, 176, 196))
+input_img_ts = input_memmap[0:num_ts, :, :, :] 
 print('X-shape testing:'+str(input_img_ts.shape))
-output_memmap = np.memmap(data_dir+'test_seg_256_onehot', dtype='float64', mode='r', shape=(196*97, 176, 176, 6)) 
-output_seg_ts = np.zeros((196*num_ts, 176, 176, 6))
-output_seg_ts[:,:,:,:] = output_memmap[0:196*num_ts, :, :, :]
+output_memmap = np.memmap(data_dir+'test_seg3d_256_onehot', dtype='float64', mode='r', shape=(97, 176, 176, 196, 6)) 
+output_seg_ts = np.zeros((num_ts, 176, 176, 196, 6))
+output_seg_ts[:,:,:,:] = output_memmap[0:num_ts, :, :, :, :]
 print('y-shape testing:'+str(output_seg_ts.shape))
 del input_memmap
 del output_memmap

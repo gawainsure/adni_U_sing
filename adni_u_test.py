@@ -45,6 +45,7 @@ def dice_coef_loss(y_true, y_pred):
 # 1. Directories
 data_dir = './train_2d_256/'
 model_dir = './model_2d/'
+model_name = 'model_2d_test'
 history_dir = './history_2d/'
 history_name = 'HistoryDict_test' #!!!!!Remember to double-check this name!!!!! 
 
@@ -72,7 +73,7 @@ adam = keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, d
 batch_size = 16
 epochs = 5
 validation_handle = 0.3
-checkpoint = keras.callbacks.ModelCheckpoint(model_dir,\
+checkpoint = keras.callbacks.ModelCheckpoint(model_dir+model_name,\
                                              monitor='categorical_accuracy',\
                                              verbose=0,\
                                              save_weights_only=False,\
@@ -175,8 +176,11 @@ def get_unet(input_img, n_filters=num_filter_handle, dropout=dropout_handle, bat
     return model
 
 # initiate system directories
-os.mkdir(model_dir)
-os.mkdir(history_dir)
+if not os.path.exists(model_dir):
+       os.mkdir(model_dir)
+
+if not os.path.exists(history_dir):
+       os.mkdir(history_dir)
 
 # compile input parameters
 input_img = Input((im_height, im_width, 5), name='img')
