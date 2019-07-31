@@ -43,7 +43,7 @@ def dice_coef_loss(y_true, y_pred):
 #\/-------Control-Panel-------\/
 
 # 1. Directories
-data_dir = './train_2d_256/'
+data_dir = './train_lt_256/'
 model_dir = './model_2d/'
 model_name = 'model_2d_test'
 history_dir = './history_2d/'
