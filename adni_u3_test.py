@@ -42,10 +42,11 @@ def dice_coef_loss(y_true, y_pred):
 #\/-------Control-Panel-------\/
 
 # 1. Directories
-data_dir = './train_lt_256/'
-model_dir = './model_3d/'
-history_dir = './history_3d/'
-history_name = 'HistoryDict_3d_test' #!!!!!Remember to double-check this name!!!!! 
+data_dir = './data/train_lt_256/3d_u_net/'
+model_dir = './model/'
+model_name = 'model_3d_test_40x_Zkernel'
+history_dir = './history/'
+history_name = 'HistoryDict_3d_test_40x_Zkernel' #!!!!!Remember to double-check this name!!!!! 
 
 # 2. Input parameters
 im_height = 176
@@ -58,6 +59,7 @@ num_ts = 5 #97
 
 # 4. U-net compiling parameters
 kernel_size_handle = 3
+depth_multiplier_handle = 40
 num_filter_handle = 16
 dropout_handle = 0.10
 batchnorm_handle = True
@@ -65,14 +67,15 @@ conv_actv = 'linear' #linear; sigmoid
 loss_function = dice_coef_loss  #dice_coef_loss; 'categorical_crossentropy'
 performance_metrics = [dice_coef, 'categorical_accuracy']
 
+
 # 4.1 Optimizer:
 adam = keras.optimizers.Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=None, decay=0.0, amsgrad=False)
 
 # 5. U-net fitting parameters
-batch_size = 16
-epochs = 5
+batch_size = 2# 16 for titan
+epochs = 50
 validation_handle = 0.3
-checkpoint = keras.callbacks.ModelCheckpoint(model_dir,\
+checkpoint = keras.callbacks.ModelCheckpoint(model_dir+model_name,\
                                              monitor='categorical_accuracy',\
                                              verbose=0,\
                                              save_weights_only=False,\
@@ -97,7 +100,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
     # first layer
     x = SeparableConv2D(filters = n_filters, kernel_size = (kernel_size, kernel_size), 
                         strides=(1, 1), padding='same', data_format='channels_last', 
-                        dilation_rate=(1, 1), depth_multiplier=2, 
+                        dilation_rate=(1, 1), depth_multiplier=depth_multiplier_handle, 
                         activation= conv_actv, use_bias=True, 
                         depthwise_initializer='glorot_uniform', 
                         pointwise_initializer='glorot_uniform', 
@@ -113,7 +116,7 @@ def conv2d_block(input_tensor, n_filters, kernel_size=3, batchnorm=True):
     # second layer
     x = SeparableConv2D(filters = n_filters, kernel_size = (kernel_size, kernel_size), 
                         strides=(1, 1), padding='same', data_format='channels_last', 
-                        dilation_rate=(1, 1), depth_multiplier=2, 
+                        dilation_rate=(1, 1), depth_multiplier=depth_multiplier_handle, 
                         activation= conv_actv, use_bias=True, 
                         depthwise_initializer='glorot_uniform', 
                         pointwise_initializer='glorot_uniform', 
@@ -206,8 +209,8 @@ output_memmap = np.memmap(data_dir+'train_seg3d_256_onehot', dtype='float64', mo
 output_seg_tr = np.zeros((num_tr, 176, 176, 196, 6))
 output_seg_tr[:,:,:,:] = output_memmap[0:num_tr, :, :, :, :]
 print('y-shape training:'+str(output_seg_tr.shape))
-#del input_memmap
-#del output_memmap
+del input_memmap
+del output_memmap
 
 input_memmap = np.memmap(data_dir+'test_img3d_256_lt', dtype='float64', mode='r', shape=(97, 176, 176, 196))
 input_img_ts = np.zeros((num_ts, 176, 176, 196))
@@ -221,12 +224,20 @@ del input_memmap
 del output_memmap
 
 x_train, x_valid, y_train, y_valid = train_test_split(input_img_tr, output_seg_tr, test_size=validation_handle, random_state=42)
+del input_img_tr
+del output_seg_tr
+x_test = input_img_ts
+y_test = output_seg_ts
+del input_img_ts
+del output_seg_ts
 
 x_train = x_train.astype('float32')
 x_valid = x_valid.astype('float32')
+x_test = x_valid.astype('float32')
 y_train = y_train.astype('float32')
 y_valid = y_valid.astype('float32')
- 
+y_test = y_test.astype('float32')
+
 print(x_train.shape[0], 'train samples')
 print(x_valid.shape[0], 'test samples')
 
@@ -251,7 +262,7 @@ print('Validation loss:', score[0])
 print('Validation Dice Coeff.:', score[1])
 print('Validation Categorical CrossEntropy:', score[2])
 
-score = model.evaluate(input_img_ts, output_seg_ts, verbose=0)
+score = model.evaluate(x_test, y_test, verbose=0)
 print('Testing loss:', score[0])
 print('Testing Dice Coeff.:', score[1])
 print('Testing Categorical CrossEntropy:', score[2])
